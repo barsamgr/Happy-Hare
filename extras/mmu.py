@@ -1586,7 +1586,7 @@ class Mmu:
         msg += "\n\n%s" % self._state_to_string()
 
         if detail:
-            msg += "\n\n%s" % self._ttg_map_to_string(title="EndlessSpool Groups")
+            msg += "\n\n%s" % self._ttg_map_to_string(title="TTG Map & EndlessSpool Groups")
             msg += "\n\n%s" % self._gate_map_to_string()
 
         self._log_always(msg)
@@ -5729,6 +5729,16 @@ class Mmu:
     def _ttg_map_to_string(self, title=None, summary=False, tool=None, show_groups=True):
         msg = "%s:\n" % title if title else "TTG Map:\n" # String used to filter in KS-HH
         if not summary:
+            # TTG Map:
+            # T0 -> Gate 0(*) > 4(?) > 5( ) [SELECTED]
+            # T1 -> Gate 4(?) > 5( ) > 0(*)
+            # T2 -> Gate 2(?)
+            # T3 -> Gate 3( ) > 8( ) > 1(*)
+            # T4 -> Gate 4(?) > 5( ) > 0(*)
+            # T5 -> Gate 5( ) > 0(*) > 4(?)
+            # T6 -> Gate 6(*)
+            # T7 -> Gate 7( )
+            # T8 -> Gate 8( ) > 1(*) > 3( )
             num_tools = self.mmu_num_gates
             tools = range(num_tools) if tool is None else [tool]
             for i in tools:
@@ -5737,25 +5747,31 @@ class Mmu:
                 msg += "\n" if i and tool is None else ""
 
                 if self.enable_endless_spool and show_groups:
-                    msg += "T%d " % i
+                    msg += "T{:<2}".format(i)
                 else:
-                    msg += "T%d-> Gate %d(%s)" % (i, gate, filament_char)
+                    msg += "T{:<2}-> Gate{:>2}({})".format(i, gate, filament_char)
 
                 if self.enable_endless_spool:
                     group = self.endless_spool_groups[gate]
+                    es = ""
                     if show_groups:
-                        es = " in EndlessSpool Group %s: " % chr(ord('A') + group)
+                        msg += " in EndlessSpool Group %s :" % chr(ord('A') + group)
                         gates_in_group = [(j + gate) % num_tools for j in range(num_tools)]
                     else:
-                        es = " "
+                        es = " >"
                         gates_in_group = [(j + gate + 1) % num_tools for j in range(num_tools - 1)]
 
-                    es += " > ".join("%d(%s)" % (g, self._get_filament_char(self.gate_status[g], show_source=False)) for g in gates_in_group if self.endless_spool_groups[g] == group)
-                    msg += es
+                    gs = " >".join("{:>2}({})".format(g, self._get_filament_char(self.gate_status[g], show_source=False)) for g in gates_in_group if self.endless_spool_groups[g] == group)
+                    if gs:
+                        msg += (es + gs)
 
                 if i == self.tool_selected:
                     msg += " [SELECTED]"
         else:
+            # Gates: | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+            # Tools: |T0 |   |T2 |T3 |T1+|T5 |T6 |T7 |T8 |
+            # Avail: | S | S | ? |   | ? |   | S |   |   |
+            # Selct: | * |-------------------------------- T0
             multi_tool = False
             num_gates = self.mmu_num_gates
             gate_indices = range(num_gates)
@@ -6142,26 +6158,26 @@ class Mmu:
             quiet = True
         if display or not quiet:
             colors = len(self.slicer_tool_map['tools'])
+            have_purge_map = len(self.slicer_tool_map['purge_volumes']) > 0
+            msg = "No slicer tool map loaded"
             if colors > 0 or self.slicer_tool_map['initial_tool'] is not None:
                 msg = "--------- Slicer MMU Tool Summary ---------\n"
                 msg += "Single color print" if colors <= 1 else "%d color print" % colors
-                msg += " (Purge volume map loaded)\n" if colors > 1 and len(self.slicer_tool_map['purge_volumes']) > 0 else "\n"
+                msg += " (Purge volume map loaded)\n" if colors > 1 and have_purge_map else "\n"
                 for t, params in self.slicer_tool_map['tools'].items():
                     msg += "T%d (Gate %d, %s, %s, %d\u00B0C)\n" % (int(t), self.ttg_map[int(t)], params['material'], params['color'], params['temp'])
                 if self.slicer_tool_map['initial_tool'] is not None:
                     msg += "Initial Tool: T%d\n" % self.slicer_tool_map['initial_tool']
                 msg += "-------------------------------------------"
-                if detail:
-                    #msg += "\nPurge Volume Map:\n"
+            if detail:
+                if have_purge_map:
                     #msg += "\n".join([" ".join(map(lambda x: str(round(x)).rjust(4, "\u2800"), row)) for row in self.slicer_tool_map['purge_volumes']])
                     msg += "\nPurge Volume Map:\n"
                     msg += "To ->" + " ".join("\u2007T{:\u2007<2}".format(i) for i in range(self.mmu_num_gates)) + "\n"
                     msg += '\n'.join(["T{:\u2007<2} {}".format(i, ' '.join(map(lambda x: str(round(x)).rjust(4, '\u2007') if x > 0 else '\u2007\u2007-\u2007', row)))
                         for i, row in enumerate(self.slicer_tool_map['purge_volumes'])])
-                else:
-                    msg += "\nDETAIL=1 to see purge map"
-            else:
-                msg = "No slicer tool map loaded"
+            elif have_purge_map:
+                msg += "\nDETAIL=1 to see purge volumes"
             self._log_always(msg)
 
     # TODO default to current gate; MMU_CHECK_GATES default to all gates. Add ALL=1 flag
