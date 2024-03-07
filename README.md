@@ -25,9 +25,8 @@ Universal MMU driver for Klipper
 
 Happy Hare (v2) is the second edition of what started life and as [alternative software control](https://github.com/moggieuk/ERCF-Software-V3) for the ERCF v1.1 ecosystem. Now in its second incarnation it has been re-architected to support any type of MMU (ERCF, Tradrack, Prusa) in a consistent manner on the Klipper platform. It is best partnered with [KlipperScreen for Happy Hare](#---klipperscreen-happy-hare-edition) until the Mainsail integration is complete :-)
 
-Also, some folks have asked about making a donation to cover the cost of the all the coffee I'm drinking (actually it's been G&T lately!). I'm not doing this for any financial reward but if you find value and feel inclined a donation to PayPal https://www.paypal.me/moggieuk will certainly be spent making your life with your favorate MMU more enjoyable.
-
-Thank you!
+Also, some folks have asked about making a donation to cover the cost of the all the coffee I'm drinking (actually it's been G&T lately!). Although I'm not doing this for any financial reward I have put hundreds of hours into this project and if you find value and feel inclined a donation to PayPal https://www.paypal.me/moggieuk will certainly be spent making your life with your favorate MMU more enjoyable. Thank you!
+<p align="center"><a href="https://www.paypal.me/moggieuk"><img src="/doc/donate.svg" width="20%"></a></p>
 
 <br>
 
@@ -68,9 +67,12 @@ Thank you!
 **[Configuation Reference](/doc/configuration.md)** 🆕<br>
 **[Toochange Movement and Slicer Setup](/doc/toolchange_movement.md)** 🆕<br>
 **[Happy Hare Macro Customization](/doc/macro_customization.md)** 🆕<br>
+**[Tip Forming and Purging](/doc/tip_forming_and_purging.md)** 🆕<br>
 **[Gcode Preprocessing](/doc/gcode_preprocessing.md)** 🆕<br>
 **[LED Support](/doc/leds.md)**<br>
 **[Conceptual MMU Design](/doc/conceptual_mmu.md)**<br>
+
+**[Third Party Addons](/config/addons/README.md)** 🆕<br>
 
 <br>
  
@@ -230,7 +232,7 @@ Happy Hare exposes a large array of 'printer' variables that are useful in your 
     printer.mmu.is_homed : {bool} True if MMU has been homed
     printer.mmu.tool : {int} 0..n | -1 for unknown | -2 for bypass
     printer.mmu.gate : {int} 0..n | -1 for unknown
-    printer.mmu.material : {string} material type for current gate (useful for print_start macro)
+    printer.mmu.active_filament : {dict} of active filament attributes (from gate_map, e.g. active_filament.material, active_filament.color)
     printer.mmu.next_tool : {int} 0..n | -1 for unknown | -2 for bypass (during a tool change)
     printer.mmu.last_tool : {int} 0..n | -1 for unknown | -2 for bypass (during a tool change after unload)
     printer.mmu.last_toolchange : {string} description of last change similar to M117 display
@@ -246,7 +248,7 @@ Happy Hare exposes a large array of 'printer' variables that are useful in your 
     printer.mmu.gate_color_rgb : {list} of color rbg values from 0.0 - 1.0 in truples (red, green blue), one per gate
     printer.mmu.gate_spool_id : {list} of IDs for Spoolman, one per gate
     printer.mmu.custom_color_rgb : {list} of color rbg values from 0.0 - 1.0 in truples (red, green blue), one per gate
-    printer.mmu.slicer_tool_map : {map} of slicer defined tool attributes (in form slicer_tool_map.tools.x.[color|material|temp])
+    printer.mmu.slicer_tool_map : {dict} of slicer defined tool attributes (in form slicer_tool_map.tools.x.[color|material|temp])
     printer.mmu.endless_spool_groups : {list} membership group (int) for each tool
     printer.mmu.tool_extrusion_multipliers : {list} current M221 extrusion multipliers (float), one per tool
     printer.mmu.tool_speed_multipliers : {list} current M220 extrusion multipliers (float), one per tool
@@ -983,16 +985,16 @@ Happy Hare keeps track of the current print state in a similar way to the klippe
 
 ```mermaid
 stateDiagram-v2
-    initialized --> started: <i>(print_start)</i>
+    initialized --> started: (print_start)
     note left of initialized: reset
-    standby --> started: <i>(print_start)</i>
+    standby --> started: (print_start)
     note left of standby: idle_timeout
-    ready --> started: <i>(print_start)</i>
+    ready --> started: (print_start)
     started --> printing
     printing --> complete: (print_complete))
     printing --> error: (print_error)
     printing --> cancelled: CANCEL_PRINT
-    printing --> PAUSE: <center><i>mmu error</i><br>or MMU_PAUSE</center>
+    printing --> PAUSE: mmu error or MMU_PAUSE
     state PAUSE {
         direction LR
         pause_locked --> paused: (MMU_UNLOCK)

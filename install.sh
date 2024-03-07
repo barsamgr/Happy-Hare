@@ -518,6 +518,8 @@ parse_file() {
     filename="$1"
     prefix_filter="$2"
     namespace="$3"
+    checkdup="$4"
+    checkdup=""
 
     if [ ! -f "${filename}" ]; then
         return
@@ -543,10 +545,16 @@ parse_file() {
 	    # If parameter is one of interest and it has a value remember it
             if echo "$parameter" | egrep -q "${prefix_filter}"; then
                 if [ "${value}" != "" ]; then
+                    combined="${namespace}${parameter}"
+                    if [ -n "${checkdup}" ] && [ ! -z "${!combined+x}" ]; then
+                        echo -e "${ERROR}${parameter} defined multiple times!"
+                    fi
                     if echo "$value" | grep -q '^{.*}$'; then
-                        eval "${namespace}${parameter}=\$${value}"
+                        eval "${combined}=\$${value}"
+                    elif [ "${value%"${value#?}"}" = "'" ]; then
+                        eval "${combined}=\'${value}\'"
                     else
-                        eval "${namespace}${parameter}='${value}'"
+                        eval "${combined}='${value}'"
                     fi
                 fi
             fi
@@ -571,12 +579,13 @@ update_copy_file() {
             # Split the line into the part before # and the part after #
             parameterAndValueAndSpace=$(echo "$line" | sed 's/^[[:space:]]*//' | sed 's/;/# /' | cut -d'#' -f1)
 
+            comment=""
             if echo "$line" | grep -q "#"; then
                 commentChar="#"
-                comment=$(echo "$line" | sed 's/.*#//')
+                comment=$(echo "$line" | sed 's/[^#]*#//')
             elif echo "$line" | grep -q ";"; then
                 commentChar=";"
-                comment=$(echo "$line" | sed 's/.*;//')
+                comment=$(echo "$line" | sed 's/[^;]*;//')
             fi
             space=`printf "%s" "$parameterAndValueAndSpace" | sed 's/.*[^[:space:]]\(.*\)$/\1/'`
 
@@ -600,6 +609,9 @@ update_copy_file() {
                     else
                         # If 'parameter' is unset or empty leave as token
                         new_value="{$parameter}"
+                    fi
+                    if [ -z "$new_value" ]; then
+                        new_value="''"
                     fi
                     if [ -n "$comment" ]; then
                         echo "${parameter}: ${new_value}${space}${commentChar}${comment}"
@@ -631,14 +643,16 @@ set_default_tokens() {
 # Set default parameters from the distribution (reference) config files
 read_default_config() {
     echo -e "${INFO}Reading default configuration parameters..."
-    parse_file "${SRCDIR}/config/base/mmu_parameters.cfg" "" "_param_"
-    parse_file "${SRCDIR}/config/base/mmu_macro_vars.cfg" "variable_"
-    parse_file "${SRCDIR}/config/base/mmu_software.cfg" "variable_"
-    parse_file "${SRCDIR}/config/base/mmu_sequence.cfg" "variable_"
-    parse_file "${SRCDIR}/config/base/mmu_form_tip.cfg" "variable_"
-    parse_file "${SRCDIR}/config/base/mmu_cut_tip.cfg" "variable_"
-    parse_file "${SRCDIR}/config/base/mmu_leds.cfg" "variable_"
-    parse_file "${SRCDIR}/config/addon/mmu_erec_cutter.cfg" "variable_"
+    parse_file "${SRCDIR}/config/base/mmu_parameters.cfg" ""          "_param_" "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_macro_vars.cfg" "variable_" ""        "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_software.cfg"   "variable_" ""        "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_sequence.cfg"   "variable_" ""        "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_form_tip.cfg"   "variable_" ""        "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_cut_tip.cfg"    "variable_" ""        "checkdup"
+    parse_file "${SRCDIR}/config/base/mmu_leds.cfg"       "variable_" ""        "checkdup"
+    for file in `cd ${SRCDIR}/config/addons ; ls *.cfg`; do
+        parse_file "${SRCDIR}/config/addons/${file}"      "variable_" ""        "checkdup"
+    done
 }
 
 # Pull parameters from previous installation
