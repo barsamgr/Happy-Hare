@@ -2233,7 +2233,7 @@ class Mmu:
 
             # Warn and don't save if the measurement is unexpected
             if traveled > max_movement:
-                self._log_always("Selector move measured %.1fmm. More than the anticipated maximum of %.1fmm. Save disabled" % (traveled, max_movement))
+                self._log_always("Selector move measured %.1fmm. More than the anticipated maximum of %.1fmm. Save disabled\nIt is likely that your basic MMU dimensions are incorrect in mmu_parameters.cfg. Check vendor/version and optional 'cad_*' parameters" % (traveled, max_movement))
                 save = 0
             else:
                 self._log_always("Selector move measured %.1fmm" % traveled)
@@ -4792,6 +4792,12 @@ class Mmu:
     # servo: True=move, False=don't mess
     # current: True=optionally reduce, False=restore to current default
     def _sync_gear_to_extruder(self, sync, servo=False, current=False):
+
+        # Safety in case somehow called with bypass/unknown selected
+        if self.gate_selected < 0:
+            sync = current = False
+            servo = True
+
         prev_sync_state = self.mmu_toolhead.is_gear_synced_to_extruder()
         if servo:
             if sync:
@@ -6501,6 +6507,9 @@ class Mmu:
                                     self._select_tool(tool_selected)
                         except MmuError as ee:
                             self._log_always("Failure re-selecting Tool %d: %s" % (tool_selected, str(ee)))
+                    else:
+                        # At least restore the selected tool, but don't re-load filament
+                        self._select_tool(tool_selected)
 
                     if not quiet:
                         self._log_info(self._ttg_map_to_string(summary=True))
